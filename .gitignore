@@ -4,5 +4,6 @@ obj/
 
 /.vscode/
 /.idea/
+/.vs/
 
 *.DotSettings.user
