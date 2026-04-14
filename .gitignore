@@ -4,5 +4,6 @@ obj/
 
 /.vscode/
 /.idea/
-
+/.vs/
+/rabbitmq_example/.vs/
 *.DotSettings.user
