@@ -13,6 +13,12 @@ Start-Process powershell -ArgumentList '-NoExit -Command "cd E:\RP\DISTRIBUTED-P
 Write-Host "RankCalculator #3..."
 Start-Process powershell -ArgumentList '-NoExit -Command "cd E:\RP\DISTRIBUTED-PROGRAMMING\RankCalculator; dotnet run"'
 
+Write-Host "EventsLogger #1..."
+Start-Process powershell -ArgumentList '-NoExit -Command "cd E:\RP\DISTRIBUTED-PROGRAMMING\EventsLogger; dotnet run"'
+
+Write-Host "EventsLogger #2..."  
+Start-Process powershell -ArgumentList '-NoExit -Command "cd E:\RP\DISTRIBUTED-PROGRAMMING\EventsLogger; dotnet run"'
+
 Start-Sleep 5
 
 Write-Host "Nginx..."

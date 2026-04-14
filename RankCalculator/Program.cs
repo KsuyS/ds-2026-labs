@@ -42,7 +42,7 @@ class Program
 
         return await channel.BasicConsumeAsync(
             queue: QueueName, 
-            autoAck: false,     // ручное подтверждение сообщений
+            autoAck: false,
             consumer: consumer
         );
     }
@@ -74,8 +74,8 @@ class Program
                 Console.WriteLine($"Текст не найден для {id}");
                 await channel.BasicNackAsync(
                     eventArgs.DeliveryTag, 
-                    false,                      // не отклонять все сообщения до этого
-                    false                       // не возвращать в очередь
+                    false,
+                    false
                 );
                 return;
             }
@@ -85,9 +85,11 @@ class Program
 
             Console.WriteLine($"Rank={rank:F2} для {id}");
 
+            await PublishRankCalculated(id, rank);
+
             await channel.BasicAckAsync(
                 eventArgs.DeliveryTag,
-                false                   // не подтверждать все предыдущие сообщения
+                false
             );
         }
         catch (Exception ex)
@@ -97,13 +99,52 @@ class Program
         }
     }
 
+    private static async Task PublishRankCalculated(string textId, double rank)
+    {
+        try
+        {
+            var factory = new ConnectionFactory
+            {
+                HostName = "localhost",
+            };
+
+            await using IConnection connection = await factory.CreateConnectionAsync();
+            await using IChannel publishChannel = await connection.CreateChannelAsync();
+
+            await publishChannel.ExchangeDeclareAsync(exchange: "rank.calculated", type: ExchangeType.Fanout);
+
+            var eventData = new
+            {
+                EventType = "RankCalculated",
+                TextId = textId,
+                Rank = rank,
+            };
+
+            var message = JsonSerializer.Serialize(eventData);
+            var body = Encoding.UTF8.GetBytes(message);
+
+            await publishChannel.BasicPublishAsync(
+                exchange: "rank.calculated",
+                routingKey: "",
+                mandatory: false,
+                body: body
+            );
+
+            Console.WriteLine($"Отправлено RankCalculated: {textId} = {rank:F2}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка публикации: {ex.Message}");
+        }
+    }
+
     private static async Task DeclareTopologyAsync(IChannel channel)
     {
         await channel.QueueDeclareAsync(
             queue: QueueName,
-            durable: true,      // durable: true — очередь переживёт перезапуск RabbitMQ
-            exclusive: false,   // exclusive: false — другие consumer тоже могут подключиться
-            autoDelete: false   // autoDelete: false — очередь не удалится при отключении последнего consumer
+            durable: true,
+            exclusive: false,
+            autoDelete: false
         );
     }
 

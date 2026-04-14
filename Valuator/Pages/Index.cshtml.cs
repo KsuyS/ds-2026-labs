@@ -45,11 +45,53 @@ public class IndexModel : PageModel
 
         double similarity = await CalculateSimilarity(db, text, id);
         await db.StringSetAsync("SIMILARITY-" + id, similarity.ToString());
+
         _logger.LogInformation($"Similarity={similarity:F2} для {id}");
+
+        await PublishSimilarityCalculated(id, similarity);
 
         await SendToRabbitMQ(id);
 
         return Redirect($"summary?id={id}");
+    }
+
+    private async Task PublishSimilarityCalculated(string textId, double similarity)
+    {
+        try
+        {
+            var factory = new ConnectionFactory
+            {
+                HostName = "localhost",
+            };
+
+            await using IConnection connection = await factory.CreateConnectionAsync();
+            await using IChannel channel = await connection.CreateChannelAsync();
+
+            await channel.ExchangeDeclareAsync("similarity.calculated", ExchangeType.Fanout);
+
+            var eventData = new
+            {
+                EventType = "SimilarityCalculated",
+                TextId = textId,
+                Similarity = similarity,
+            };
+
+            var message = JsonSerializer.Serialize(eventData);
+            var body = Encoding.UTF8.GetBytes(message);
+
+            await channel.BasicPublishAsync(
+                exchange: "similarity.calculated",
+                routingKey: "",
+                mandatory: false,
+                body: body
+            );
+
+            _logger.LogInformation($"SimilarityCalculated: {textId} = {similarity:F2}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Similarity event error: {ex.Message}");
+        }
     }
 
     private async Task<double> CalculateSimilarity(IDatabase db, string currentText, string currentId)
@@ -93,9 +135,9 @@ public class IndexModel : PageModel
         var body = Encoding.UTF8.GetBytes(id);
 
         await channel.BasicPublishAsync(
-            exchange: ExchangeName,         // куда отправить
-            routingKey: "",                 // ключ маршрутизации (пустой = отправить всем)
-            mandatory: false,               // tсли очереди нет, не возвращать ошибку
+            exchange: ExchangeName,
+            routingKey: "",
+            mandatory: false,
             body: body
         );
 
@@ -105,24 +147,21 @@ public class IndexModel : PageModel
     private static async Task DeclareTopologyAsync(RabbitMQ.Client.IChannel channel)
     {
         await channel.ExchangeDeclareAsync(
-            exchange: ExchangeName,                     // в какие очереди направить сообщение
-            type: RabbitMQ.Client.ExchangeType.Direct   // по точному совпадению routing key (пустой = отправить в привязанную очередь)
+            exchange: ExchangeName,
+            type: RabbitMQ.Client.ExchangeType.Direct
         );
-        // Fanout  Всем очередям(broadcast)
-        // Topic По шаблону routing key(wildcards)
-        // Headers По заголовкам сообщения
 
         await channel.QueueDeclareAsync(
             queue: QueueName,
-            durable: true,      // очередь переживёт перезапуск RabbitMQ
-            exclusive: false,   // другие подключения тоже могут использовать
-            autoDelete: false   // не удалять при отключении последнего consumer
+            durable: true,
+            exclusive: false,
+            autoDelete: false
         );
 
         await channel.QueueBindAsync(
             queue: QueueName,
             exchange: ExchangeName,
-            routingKey: ""              // все сообщения
+            routingKey: ""
         );
     }
 
