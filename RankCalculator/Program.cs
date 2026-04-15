@@ -111,7 +111,10 @@ class Program
             await using IConnection connection = await factory.CreateConnectionAsync();
             await using IChannel publishChannel = await connection.CreateChannelAsync();
 
-            await publishChannel.ExchangeDeclareAsync(exchange: "rank.calculated", type: ExchangeType.Fanout);
+            await publishChannel.ExchangeDeclareAsync(
+                exchange: "rank.calculated",
+                type: ExchangeType.Fanout
+            );
 
             var eventData = new
             {
@@ -126,7 +129,6 @@ class Program
             await publishChannel.BasicPublishAsync(
                 exchange: "rank.calculated",
                 routingKey: "",
-                mandatory: false,
                 body: body
             );
 

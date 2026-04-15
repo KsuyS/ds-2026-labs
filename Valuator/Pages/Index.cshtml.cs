@@ -67,7 +67,10 @@ public class IndexModel : PageModel
             await using IConnection connection = await factory.CreateConnectionAsync();
             await using IChannel channel = await connection.CreateChannelAsync();
 
-            await channel.ExchangeDeclareAsync("similarity.calculated", ExchangeType.Fanout);
+            await channel.ExchangeDeclareAsync(
+                exchange: "similarity.calculated",
+                type: ExchangeType.Fanout
+            );
 
             var eventData = new
             {
@@ -82,7 +85,6 @@ public class IndexModel : PageModel
             await channel.BasicPublishAsync(
                 exchange: "similarity.calculated",
                 routingKey: "",
-                mandatory: false,
                 body: body
             );
 

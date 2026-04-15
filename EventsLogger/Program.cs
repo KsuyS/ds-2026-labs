@@ -22,18 +22,20 @@ class Program
         await using IConnection connection = await factory.CreateConnectionAsync();
         await using IChannel channel = await connection.CreateChannelAsync();
 
-        string queueName = $"eventslogger-{Guid.NewGuid().ToString("N")[..8]}";
-
-        await channel.QueueDeclareAsync(
-            queue: queueName, 
-            durable: false, 
-            exclusive: true
-        );
+        QueueDeclareOk queueDeclareResult = await channel.QueueDeclareAsync();
+        string queueName = queueDeclareResult.QueueName;
 
         foreach (var exchange in EventExchanges)
         {
-            await channel.ExchangeDeclareAsync(exchange, ExchangeType.Fanout);
-            await channel.QueueBindAsync(queueName, exchange, "");
+            await channel.ExchangeDeclareAsync(
+                exchange: exchange, 
+                type: ExchangeType.Fanout
+            );
+            await channel.QueueBindAsync(
+                queue: queueName, 
+                exchange,
+                routingKey: ""
+            );
         }
 
         var consumer = new AsyncEventingBasicConsumer(channel);
