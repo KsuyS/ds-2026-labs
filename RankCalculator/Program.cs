@@ -58,9 +58,9 @@ class Program
             {
                 Console.WriteLine("Пустой Id в сообщении");
                 await channel.BasicNackAsync(
-                    eventArgs.DeliveryTag,
-                    false,
-                    false
+                    deliveryTag: eventArgs.DeliveryTag,
+                    multiple: false,
+                    requeue: false
                 );
                 return;
             }
@@ -73,9 +73,9 @@ class Program
             {
                 Console.WriteLine($"Текст не найден для {id}");
                 await channel.BasicNackAsync(
-                    eventArgs.DeliveryTag, 
-                    false,
-                    false
+                    deliveryTag: eventArgs.DeliveryTag,
+                    multiple: false,
+                    requeue: false
                 );
                 return;
             }
@@ -88,14 +88,18 @@ class Program
             await PublishRankCalculated(id, rank);
 
             await channel.BasicAckAsync(
-                eventArgs.DeliveryTag,
-                false
+                deliveryTag: eventArgs.DeliveryTag,
+                multiple: false
             );
         }
         catch (Exception ex)
         {
             Console.WriteLine($"{ex.Message}");
-            await channel.BasicNackAsync(eventArgs.DeliveryTag, false, false);
+            await channel.BasicNackAsync(
+                deliveryTag: eventArgs.DeliveryTag,
+                multiple: false,
+                requeue: false
+            );
         }
     }
 

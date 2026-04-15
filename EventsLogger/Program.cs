@@ -32,8 +32,8 @@ class Program
                 type: ExchangeType.Fanout
             );
             await channel.QueueBindAsync(
-                queue: queueName, 
-                exchange,
+                queue: queueName,
+                exchange: exchange,
                 routingKey: ""
             );
         }
@@ -66,16 +66,27 @@ class Program
 
                 Console.WriteLine();
 
-                await channel.BasicAckAsync(eventArgs.DeliveryTag, false);
+                await channel.BasicAckAsync(
+                    deliveryTag: eventArgs.DeliveryTag,
+                    multiple: false
+                );
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"EventLogger error: {ex.Message}");
-                await channel.BasicNackAsync(eventArgs.DeliveryTag, false, true);
+                await channel.BasicNackAsync(
+                    deliveryTag: eventArgs.DeliveryTag,
+                    multiple: false,
+                    requeue: true
+                );
             }
         };
 
-        await channel.BasicConsumeAsync(queueName, false, consumer);
+        await channel.BasicConsumeAsync(
+            queue: queueName,
+            autoAck: false,
+            consumer: consumer
+        );
         Console.ReadLine();
     }
 }
