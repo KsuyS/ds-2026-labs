@@ -1,0 +1,13 @@
+services:
+  rabbitmq-pa3:
+    image: rabbitmq:3.13.7
+    container_name: rabbitmq-pa3
+    hostname: rabbitmq-pa3
+    volumes:
+      - rabbitmq_pa3_data:/var/lib/rabbitmq
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+
+volumes:
+  rabbitmq_pa3_data:
