@@ -1,0 +1,14 @@
+services:
+  nats-pa3:
+    image: nats:2.10-alpine
+    container_name: nats-pa3
+    hostname: nats-pa3
+    volumes:
+      - nats_pa3_data:/data
+    ports:
+      - '4222:4222'
+      - '6222:6222'
+      - '8222:8222'
+
+volumes:
+  nats_pa3_data:

@@ -53,4 +53,3 @@ SignalR и Centrifugo — готовые системы промышленног
 
 1. [Quickstart tutorial](https://centrifugal.dev/docs/getting-started/quickstart)
 2. [Integration guide](https://centrifugal.dev/docs/getting-started/integration)
-
