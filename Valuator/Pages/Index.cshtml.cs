@@ -5,6 +5,7 @@ using RabbitMQ.Client;
 using StackExchange.Redis;
 using System.Text;
 using System.Text.Json;
+using Valuator.Services;
 
 namespace Valuator.Pages;
 
@@ -14,56 +15,81 @@ public class IndexModel : PageModel
     private const string QueueName = "valuator.processing.rank";
 
     private readonly ILogger<IndexModel> _logger;
-    private readonly IConnectionMultiplexer _redis;
+    private readonly RedisShardService _shardService;
 
-    public IndexModel(ILogger<IndexModel> logger, IConnectionMultiplexer redis)
+    [BindProperty]
+    public string Text { get; set; } = "";
+
+    [BindProperty]
+    public string Country { get; set; } = "";
+
+    public IndexModel(
+        ILogger<IndexModel> logger,
+        RedisShardService shardService
+    )
     {
         _logger = logger;
-        _redis = redis;
+        _shardService = shardService;
     }
 
     public void OnGet()
     {
-
     }
 
-    public async Task<IActionResult> OnPost(string text)
+    public async Task<IActionResult> OnPost()
     {
-        if (string.IsNullOrWhiteSpace(text))
+        if (string.IsNullOrWhiteSpace(Text) || string.IsNullOrWhiteSpace(Country))
         {
             return Redirect("/error");
         }
 
-        _logger.LogDebug(text);
+        _logger.LogDebug(Text);
         string id = Guid.NewGuid().ToString();
 
-        var db = _redis.GetDatabase();
+        await _shardService.SaveTextAsync(id, Text, Country);
 
-        string textKey = "TEXT-" + id;
-        await db.StringSetAsync(textKey, text);
-        await UpdateTextKeysList(db, textKey);
-
-        double similarity = await CalculateSimilarity(db, text, id);
-        await db.StringSetAsync("SIMILARITY-" + id, similarity.ToString());
-
-        _logger.LogInformation($"Similarity={similarity:F2} для {id}");
-
-        await PublishSimilarityCalculated(id, similarity);
+        var shardDb = await _shardService.GetShardDbAsync(id);
+        if (shardDb != null)
+        {
+            double similarity = await CalculateSimilarity(shardDb, Text, id);
+            await shardDb.StringSetAsync($"SIMILARITY:{id}", similarity.ToString());
+            _logger.LogInformation($"Similarity={similarity:F2} для {id}");
+            await PublishSimilarityCalculated(id, similarity);
+        }
 
         await SendToRabbitMQ(id);
 
         return Redirect($"summary?id={id}");
     }
 
+    private async Task<double> CalculateSimilarity(IDatabase db, string currentText, string currentId)
+    {
+        var server = db.Multiplexer.GetServer(db.Multiplexer.GetEndPoints().First());
+        var keys = server.Keys(pattern: "TEXT:*").ToList();
+
+        foreach (var key in keys)
+        {
+            var keyStr = key.ToString();
+            if (keyStr == $"TEXT:{currentId}")
+            {
+                continue;
+            }
+
+            var existingText = await db.StringGetAsync(keyStr);
+            if (!existingText.IsNullOrEmpty && existingText.ToString() == currentText)
+            {
+                return 1.0;
+            }
+        }
+
+        return 0.0;
+    }
+
     private async Task PublishSimilarityCalculated(string textId, double similarity)
     {
         try
         {
-            var factory = new ConnectionFactory
-            {
-                HostName = "localhost",
-            };
-
+            var factory = new ConnectionFactory { HostName = "localhost" };
             await using IConnection connection = await factory.CreateConnectionAsync();
             await using IChannel channel = await connection.CreateChannelAsync();
 
@@ -96,39 +122,9 @@ public class IndexModel : PageModel
         }
     }
 
-    private async Task<double> CalculateSimilarity(IDatabase db, string currentText, string currentId)
-    {
-        var keysStr = await db.StringGetAsync("TEXT-KEYS-LIST");
-
-        if (keysStr.IsNullOrEmpty)
-        {
-            return 0.0;
-        }
-
-        string[] allKeys = keysStr.ToString().Split(',');
-        foreach (string key in allKeys)
-        {
-            if (string.IsNullOrWhiteSpace(key) || key == $"TEXT-{currentId}")
-            {
-                continue;
-            }
-
-            var existingText = await db.StringGetAsync(key);
-            if (!existingText.IsNullOrEmpty && existingText.ToString() == currentText)
-            {
-                return 1.0;
-            }
-        }
-
-        return 0.0;
-    }
-
     private async Task SendToRabbitMQ(string id)
     {
-        var factory = new ConnectionFactory() 
-        {
-            HostName = "localhost",
-        };
+        var factory = new ConnectionFactory() { HostName = "localhost" };
         await using IConnection connection = await factory.CreateConnectionAsync();
         await using IChannel channel = await connection.CreateChannelAsync();
 
@@ -150,7 +146,7 @@ public class IndexModel : PageModel
     {
         await channel.ExchangeDeclareAsync(
             exchange: ExchangeName,
-            type: RabbitMQ.Client.ExchangeType.Direct
+            type: ExchangeType.Direct
         );
 
         await channel.QueueDeclareAsync(
@@ -165,27 +161,5 @@ public class IndexModel : PageModel
             exchange: ExchangeName,
             routingKey: ""
         );
-    }
-
-    private async Task UpdateTextKeysList(IDatabase db, string newTextKey)
-    {
-        var keysStr = await db.StringGetAsync("TEXT-KEYS-LIST");
-
-        string[] keyList;
-        if (keysStr.IsNullOrEmpty)
-        {
-            keyList = new[] { newTextKey };
-        }
-        else
-        {
-            keyList = keysStr.ToString()
-                .Split(',')
-                .Where(k => !string.IsNullOrWhiteSpace(k))
-                .Append(newTextKey)
-                .Distinct()
-                .ToArray();
-        }
-
-        await db.StringSetAsync("TEXT-KEYS-LIST", string.Join(",", keyList));
     }
 }

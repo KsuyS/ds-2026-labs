@@ -10,17 +10,24 @@ class Program
 {
     private const string QueueName = "valuator.processing.rank";
 
-    private static readonly ConnectionMultiplexer redis = ConnectionMultiplexer.Connect("localhost:6379");
+    private static ConnectionMultiplexer _mainRedis = null!;
+    private static readonly Dictionary<string, ConnectionMultiplexer> _shards = new();
 
     public static async Task Main(string[] args)
     {
         Console.WriteLine("RankCalculator started");
 
-        var factory = new ConnectionFactory 
-        {
-            HostName = "localhost",
-        };
+        var mainConn = Environment.GetEnvironmentVariable("DB_MAIN") ?? "localhost:6000";
+        var ruConn = Environment.GetEnvironmentVariable("DB_RU") ?? "localhost:6001";
+        var euConn = Environment.GetEnvironmentVariable("DB_EU") ?? "localhost:6002";
+        var asiaConn = Environment.GetEnvironmentVariable("DB_ASIA") ?? "localhost:6003";
 
+        _mainRedis = ConnectionMultiplexer.Connect(mainConn);
+        _shards["RU"] = ConnectionMultiplexer.Connect(ruConn);
+        _shards["EU"] = ConnectionMultiplexer.Connect(euConn);
+        _shards["ASIA"] = ConnectionMultiplexer.Connect(asiaConn);
+
+        var factory = new ConnectionFactory { HostName = "localhost" };
         await using IConnection connection = await factory.CreateConnectionAsync();
         await using IChannel channel = await connection.CreateChannelAsync();
 
@@ -32,16 +39,18 @@ class Program
         Console.ReadLine();
 
         await channel.BasicCancelAsync(consumerTag);
-        Console.WriteLine("done");
     }
 
     private static async Task<string> RunConsumer(IChannel channel)
     {
-        AsyncEventingBasicConsumer consumer = new (channel);
-        consumer.ReceivedAsync += (_, eventArgs) => ConsumeAsync(channel, eventArgs);
+        AsyncEventingBasicConsumer consumer = new(channel);
+        consumer.ReceivedAsync += async (_, eventArgs) =>
+        {
+            await ConsumeAsync(channel, eventArgs);
+        };
 
         return await channel.BasicConsumeAsync(
-            queue: QueueName, 
+            queue: QueueName,
             autoAck: false,
             consumer: consumer
         );
@@ -51,32 +60,34 @@ class Program
     {
         try
         {
-            Console.WriteLine("Consuming");
-
             string id = Encoding.UTF8.GetString(eventArgs.Body.ToArray());
             if (string.IsNullOrWhiteSpace(id))
             {
                 Console.WriteLine("Пустой Id в сообщении");
-                await channel.BasicNackAsync(
-                    deliveryTag: eventArgs.DeliveryTag,
-                    multiple: false,
-                    requeue: false
-                );
+                await channel.BasicNackAsync(eventArgs.DeliveryTag, false, false);
                 return;
             }
 
-            var db = redis.GetDatabase();
-            string textKey = "TEXT-" + id;
-            var text = await db.StringGetAsync(textKey);
+            var mainDb = _mainRedis.GetDatabase();
+            var region = await mainDb.StringGetAsync($"SHARD:{id}");
+
+            if (region.IsNullOrEmpty)
+            {
+                Console.WriteLine($"Регион не найден для {id}");
+                await channel.BasicNackAsync(eventArgs.DeliveryTag, false, false);
+                return;
+            }
+
+            Console.WriteLine($"LOOKUP: {id}, {region}");
+
+            var shardRedis = _shards[region.ToString()];
+            var shardDb = shardRedis.GetDatabase();
+            var text = await shardDb.StringGetAsync($"TEXT:{id}");
 
             if (text.IsNullOrEmpty)
             {
-                Console.WriteLine($"Текст не найден для {id}");
-                await channel.BasicNackAsync(
-                    deliveryTag: eventArgs.DeliveryTag,
-                    multiple: false,
-                    requeue: false
-                );
+                Console.WriteLine($"Текст не найден для {id} в шарде {region}");
+                await channel.BasicNackAsync(eventArgs.DeliveryTag, false, false);
                 return;
             }
 
@@ -85,26 +96,19 @@ class Program
             await Task.Delay(interval);
 
             double rank = CalculateRank(text.ToString());
-            await db.StringSetAsync("RANK-" + id, rank.ToString());
 
-            Console.WriteLine($"Rank={rank:F2} для {id}");
+            await shardDb.StringSetAsync($"RANK:{id}", rank.ToString());
+            Console.WriteLine($"Rank={rank:F2} для {id} в шарде {region}");
 
             await NotifyValuator(id, rank);
             await PublishRankCalculated(id, rank);
 
-            await channel.BasicAckAsync(
-                deliveryTag: eventArgs.DeliveryTag,
-                multiple: false
-            );
+            await channel.BasicAckAsync(eventArgs.DeliveryTag, false);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"{ex.Message}");
-            await channel.BasicNackAsync(
-                deliveryTag: eventArgs.DeliveryTag,
-                multiple: false,
-                requeue: false
-            );
+            Console.WriteLine($"Ошибка: {ex.Message}");
+            await channel.BasicNackAsync(eventArgs.DeliveryTag, false, false);
         }
     }
 

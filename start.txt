@@ -1,10 +1,8 @@
-﻿$redisExe = "E:\RP\Redis-x64-3.0.504\redis-server.exe"
-
+$redisExe = "E:\RP\Redis-x64-3.0.504\redis-server.exe"
 Start-Process $redisExe -ArgumentList "--port","6000","--maxmemory","256mb","--dir","E:\RP\DISTRIBUTED-PROGRAMMING\redis-main" -WorkingDirectory "E:\RP\DISTRIBUTED-PROGRAMMING\redis-main"
 Start-Process $redisExe -ArgumentList "--port","6001","--maxmemory","256mb","--dir","E:\RP\DISTRIBUTED-PROGRAMMING\redis-ru" -WorkingDirectory "E:\RP\DISTRIBUTED-PROGRAMMING\redis-ru"
 Start-Process $redisExe -ArgumentList "--port","6002","--maxmemory","256mb","--dir","E:\RP\DISTRIBUTED-PROGRAMMING\redis-eu" -WorkingDirectory "E:\RP\DISTRIBUTED-PROGRAMMING\redis-eu"
 Start-Process $redisExe -ArgumentList "--port","6003","--maxmemory","256mb","--dir","E:\RP\DISTRIBUTED-PROGRAMMING\redis-asia" -WorkingDirectory "E:\RP\DISTRIBUTED-PROGRAMMING\redis-asia"
-
 $env:DB_MAIN = "localhost:6000"
 $env:DB_RU = "localhost:6001" 
 $env:DB_EU = "localhost:6002"
@@ -16,7 +14,16 @@ Start-Process powershell -ArgumentList '-NoExit -Command "cd E:\RP\DISTRIBUTED-P
 Write-Host "RankCalculator #1..."
 Start-Process powershell -ArgumentList '-NoExit -Command "cd E:\RP\DISTRIBUTED-PROGRAMMING\RankCalculator; dotnet run"'
 
+Write-Host "RankCalculator #2..."
+Start-Process powershell -ArgumentList '-NoExit -Command "cd E:\RP\DISTRIBUTED-PROGRAMMING\RankCalculator; dotnet run"'
+
+Write-Host "RankCalculator #3..."
+Start-Process powershell -ArgumentList '-NoExit -Command "cd E:\RP\DISTRIBUTED-PROGRAMMING\RankCalculator; dotnet run"'
+
 Write-Host "EventsLogger #1..."
+Start-Process powershell -ArgumentList '-NoExit -Command "cd E:\RP\DISTRIBUTED-PROGRAMMING\EventsLogger; dotnet run"'
+
+Write-Host "EventsLogger #2..."  
 Start-Process powershell -ArgumentList '-NoExit -Command "cd E:\RP\DISTRIBUTED-PROGRAMMING\EventsLogger; dotnet run"'
 
 Start-Sleep 5

@@ -1,23 +1,22 @@
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Logging;
-using StackExchange.Redis;
+using Valuator.Services;
 
 namespace Valuator.Pages;
 
 public class SummaryModel : PageModel
 {
     private readonly ILogger<SummaryModel> _logger;
-    private readonly IConnectionMultiplexer _redis;
+    private readonly RedisShardService _shardService;
 
-    public SummaryModel(ILogger<SummaryModel> logger, IConnectionMultiplexer redis)
+    public SummaryModel(ILogger<SummaryModel> logger, RedisShardService shardService)
     {
         _logger = logger;
-        _redis = redis;
+        _shardService = shardService;
     }
 
     public string Rank { get; set; } = "Оценка содержания не завершена";
     public string Similarity { get; set; } = "0.00";
-    public bool IsReady => Rank != "Оценка содержания не завершена";
 
     public async Task OnGet(string? id)
     {
@@ -29,20 +28,10 @@ public class SummaryModel : PageModel
 
         _logger.LogDebug(id);
 
-        var db = _redis.GetDatabase();
+        var similarity = await _shardService.GetSimilarityAsync(id);
+        Similarity = similarity ?? "0.00";
 
-        string rankKey = "RANK-" + id;
-        string similarityKey = "SIMILARITY-" + id;
-
-        var rankStr = await db.StringGetAsync(rankKey);
-        var similarityStr = await db.StringGetAsync(similarityKey);
-
-        Rank = !rankStr.IsNullOrEmpty && double.TryParse(rankStr.ToString(), out var rankParsed)
-            ? rankParsed.ToString("F2")
-            : "Оценка содержания не завершена";
-
-        Similarity = !similarityStr.IsNullOrEmpty && double.TryParse(similarityStr.ToString(), out var similarityParsed)
-            ? similarityParsed.ToString("F2")
-            : "0.00";
+        var rank = await _shardService.GetRankAsync(id);
+        Rank = rank ?? "Оценка содержания не завершена";
     }
 }
