@@ -2,6 +2,7 @@
 using RabbitMQ.Client.Events;
 using System.Text;
 using System.Text.Json;
+using System.Net.Http;
 
 class Program
 {

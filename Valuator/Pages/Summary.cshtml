@@ -1,6 +1,26 @@
-﻿@page
+﻿@page "{id?}"
 @model Valuator.Pages.SummaryModel
 @{
+    ViewData["Title"] = "Summary";
 }
-<p>Оценка содержания: @Model.Rank</p>
-<p>Плагиат: @Model.Similarity</p>
+
+<div>
+    <h1>
+        Summary
+    </h1>
+    <div>
+        Rank:
+        <span id="rankValue">
+            @(Model?.Rank ?? "Оценка не завершена")
+        </span>
+    </div>
+    <div>
+        Similarity:
+        <span id="similarityValue">
+            @(Model?.Similarity ?? "0.00")
+        </span>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
+<script src="/js/signalr-summary.js"></script>

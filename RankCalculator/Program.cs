@@ -80,11 +80,16 @@ class Program
                 return;
             }
 
+            var interval = TimeSpan.FromSeconds(new Random().Next(3, 16));
+            Console.WriteLine($"Waiting {interval} for text-{id}");
+            await Task.Delay(interval);
+
             double rank = CalculateRank(text.ToString());
             await db.StringSetAsync("RANK-" + id, rank.ToString());
 
             Console.WriteLine($"Rank={rank:F2} для {id}");
 
+            await NotifyValuator(id, rank);
             await PublishRankCalculated(id, rank);
 
             await channel.BasicAckAsync(
@@ -100,6 +105,29 @@ class Program
                 multiple: false,
                 requeue: false
             );
+        }
+    }
+
+    private static async Task NotifyValuator(string textId, double rank)
+    {
+        try
+        {
+            using var client = new HttpClient();
+            var data = new
+            {
+                textId,
+                rank
+            };
+            var json = JsonSerializer.Serialize(data);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            Console.WriteLine($"POST http://localhost:8080/api/notify");
+            var response = await client.PostAsync("http://localhost:8080/api/notify", content);
+            Console.WriteLine($"EventsLogger → Valuator: {response.StatusCode}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"NotifyValuator error: {ex.Message}");
         }
     }
 
