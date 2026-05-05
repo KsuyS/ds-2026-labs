@@ -2,7 +2,8 @@
 bin/
 obj/
 
-.vscode/
-.idea/
-
+/.vscode/
+/.idea/
+/.vs/
+/rabbitmq_example/.vs/
 *.DotSettings.user
