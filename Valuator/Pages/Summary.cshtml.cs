@@ -1,28 +1,37 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Logging;
+using Valuator.Services;
 
 namespace Valuator.Pages;
+
 public class SummaryModel : PageModel
 {
     private readonly ILogger<SummaryModel> _logger;
+    private readonly RedisShardService _shardService;
 
-    public SummaryModel(ILogger<SummaryModel> logger)
+    public SummaryModel(ILogger<SummaryModel> logger, RedisShardService shardService)
     {
         _logger = logger;
+        _shardService = shardService;
     }
 
-    public double Rank { get; set; }
-    public double Similarity { get; set; }
+    public string Rank { get; set; } = "Оценка содержания не завершена";
+    public string Similarity { get; set; } = "0.00";
 
-    public void OnGet(string id)
+    public async Task OnGet(string? id)
     {
+        if (string.IsNullOrEmpty(id))
+        {
+            Rank = "ошибка ID";
+            return;
+        }
+
         _logger.LogDebug(id);
 
-        // TODO: (pa1) проинициализировать свойства Rank и Similarity значениями из БД (Redis)
+        var similarity = await _shardService.GetSimilarityAsync(id);
+        Similarity = similarity ?? "0.00";
+
+        var rank = await _shardService.GetRankAsync(id);
+        Rank = rank ?? "Оценка содержания не завершена";
     }
 }

@@ -7,6 +7,14 @@
 <div class="text-center">
     <form method="post">
         <div class="col-2">Текст для оценки:</div>
+        <select name="country" required style="margin-bottom: 15px;">
+            <option value="">Выбери страну</option>
+            <option value="Russia">Russia (RU)</option>
+            <option value="France">France (EU)</option>
+            <option value="Germany">Germany (EU)</option>
+            <option value="UAE">UAE (ASIA)</option>
+            <option value="India">India (ASIA)</option>
+        </select>
         <div class="col-10">
             <textarea name="text" rows="5" cols="50"></textarea>
             <input type="submit" />
